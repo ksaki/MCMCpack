@@ -69,6 +69,8 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   phi = cbind(ones<double>(N,1), phi);
   Matrix<> Xstar(N, K);
   Matrix<> tau(N, H); // first col of tau should be zero (control group)
+  Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
+  Matrix<> coef_tau(cov_tau.cols(), 1); // coefficient of the mean of phi
 
   // storage matrices (row major order)
   Matrix<> Lambda_store;
@@ -84,7 +86,9 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   if (storescores){
     tau_store = Matrix<>(nsamp, N*H);
   }
- 
+  Matrix<> coef_phi_store(nsamp, coef_phi.rows());
+  Matrix<> coef_tau_store(nsamp, coef_tau.rows());
+
   ///////////////////
   // Gibbs Sampler //
   ///////////////////
@@ -110,8 +114,11 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
     Matrix<> phi_post_C = cholesky(phi_post_var);
     for (unsigned int i = 0; i < N; ++i) {
+      //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
+		  //		       * (t(Xstar(i,_))-Lambda_const));
+      // with covariates for phi
       Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
-					       * (t(Xstar(i,_))-Lambda_const));
+					       * (t(Xstar(i,_))-Lambda_const) + cov_phi(i,_) * coef_phi);
       Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
 				phi_post_mean);
       for (unsigned int j = 0; j < (D-1); ++j)
