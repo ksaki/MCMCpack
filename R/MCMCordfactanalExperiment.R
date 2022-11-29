@@ -1,6 +1,150 @@
-#' Working in Progress: MCMCordfactanal for Experiment data 
-#'
+###########################################################################
+## sample from the posterior distribution of a factor analysis model 
+## tailored to experiment data. R using linked C++ code in Scythe.
+##
+## The model is... To be updated
+##########################################################################
 
+#' Markov Chain Monte Carlo for Ordinal Data Factor Analysis Model with
+#' Experiment Data (To be updated)
+#'
+#' @param x Either a formula or a numeric matrix containing the manifest
+#' variables.
+#'
+#' @param treatment a matrix for treatment assignment.
+#'
+#' @param factors The number of factors to be fitted.
+#'
+#' @param lambda.constraints List of lists specifying possible equality or
+#' simple inequality constraints on the factor loadings. A typical entry in the
+#' list has one of three forms: \code{varname=list(d,c)} which will constrain
+#' the dth loading for the variable named varname to be equal to c,
+#' \code{varname=list(d,"+")} which will constrain the dth loading for the
+#' variable named varname to be positive, and \code{varname=list(d, "-")} which
+#' will constrain the dth loading for the variable named varname to be
+#' negative. If x is a matrix without column names defaults names of ``V1",
+#' ``V2", ... , etc will be used. Note that, unlike \code{MCMCfactanal}, the
+#' \eqn{\Lambda} matrix used here has \code{factors}+1 columns. The
+#' first column of \eqn{\Lambda} corresponds to negative item
+#' difficulty parameters and should generally not be constrained.
+#'
+#' @param data A data frame.
+#'
+#' @param burnin The number of burn-in iterations for the sampler.
+#'
+#' @param mcmc The number of iterations for the sampler.
+#'
+#' @param thin The thinning interval used in the simulation.  The number of
+#' iterations must be divisible by this value.
+#'
+#' @param tune The tuning parameter for the Metropolis-Hastings sampling. Can
+#' be either a scalar or a \eqn{k}-vector. Must be strictly positive.
+#'
+#' @param verbose A switch which determines whether or not the progress of the
+#' sampler is printed to the screen.  If \code{verbose} is greater than 0 the
+#' iteration number and the Metropolis-Hastings acceptance rate are printed to
+#' the screen every \code{verbose}th iteration.
+#'
+#' @param seed The seed for the random number generator.  If NA, the Mersenne
+#' Twister generator is used with default seed 12345; if an integer is passed
+#' it is used to seed the Mersenne twister.  The user can also pass a list of
+#' length two to use the L'Ecuyer random number generator, which is suitable
+#' for parallel computation.  The first element of the list is the L'Ecuyer
+#' seed, which is a vector of length six or NA (if NA a default seed of
+#' \code{rep(12345,6)} is used).  The second element of list is a positive
+#' substream number. See the MCMCpack specification for more details.
+#'
+#' @param lambda.start Starting values for the factor loading matrix Lambda. If
+#' \code{lambda.start} is set to a scalar the starting value for all
+#' unconstrained loadings will be set to that scalar. If \code{lambda.start} is
+#' a matrix of the same dimensions as Lambda then the \code{lambda.start}
+#' matrix is used as the starting values (except for equality-constrained
+#' elements). If \code{lambda.start} is set to \code{NA} (the default) then
+#' starting values for unconstrained elements in the first column of Lambda are
+#' based on the observed response pattern, the remaining unconstrained elements
+#' of Lambda are set to , and starting values for inequality constrained
+#' elements are set to either 1.0 or -1.0 depending on the nature of the
+#' constraints.
+#'
+#' @param l0 The means of the independent Normal prior on the factor loadings.
+#' Can be either a scalar or a matrix with the same dimensions as
+#' \code{Lambda}.
+#'
+#' @param L0 The precisions (inverse variances) of the independent Normal prior
+#' on the factor loadings. Can be either a scalar or a matrix with the same
+#' dimensions as \code{Lambda}.
+#'
+#' @param store.lambda A switch that determines whether or not to store the
+#' factor loadings for posterior analysis. By default, the factor loadings are
+#' all stored.
+#'
+#' @param store.scores A switch that determines whether or not to store the
+#' factor scores for posterior analysis.  \emph{NOTE: This takes an enormous
+#' amount of memory, so should only be used if the chain is thinned heavily, or
+#' for applications with a small number of observations}.  By default, the
+#' factor scores are not stored.
+#'
+#' @param drop.constantvars A switch that determines whether or not manifest
+#' variables that have no variation should be deleted before fitting the model.
+#' Default = TRUE.
+#'
+#' @param ... further arguments to be passed
+#'
+#' @return An mcmc object that contains the posterior sample.  This object can
+#' be summarized by functions provided by the coda package.
+#'
+#' @export
+#'
+#' @seealso \code{\link[coda]{plot.mcmc}}, \code{\link[coda]{summary.mcmc}},
+#' \code{\link[stats]{factanal}}, \code{\link[MCMCpack]{MCMCfactanal}},
+#' \code{\link[MCMCpack]{MCMCirt1d}}, \code{\link[MCMCpack]{MCMCirtKd}}
+#'
+#' @references Shawn Treier and Simon Jackman. 2008. ``Democracy as a Latent
+#' Variable."  \emph{American Journal of Political Science}. 52: 201-217.
+#'
+#' Andrew D. Martin, Kevin M. Quinn, and Jong Hee Park. 2011.  ``MCMCpack:
+#' Markov Chain Monte Carlo in R.'', \emph{Journal of Statistical Software}.
+#' 42(9): 1-21.  \doi{10.18637/jss.v042.i09}.
+#'
+#' M. K. Cowles. 1996. ``Accelerating Monte Carlo Markov Chain Convergence for
+#' Cumulative-link Generalized Linear Models." \emph{Statistics and Computing.}
+#' 6: 101-110.
+#'
+#' Valen E. Johnson and James H. Albert. 1999. ``Ordinal Data Modeling."
+#' Springer: New York.
+#'
+#' Daniel Pemstein, Kevin M. Quinn, and Andrew D. Martin.  2007.  \emph{Scythe
+#' Statistical Library 1.0.} \url{http://scythe.lsa.umich.edu}.
+#'
+#' Martyn Plummer, Nicky Best, Kate Cowles, and Karen Vines. 2006.  ``Output
+#' Analysis and Diagnostics for MCMC (CODA)'', \emph{R News}. 6(1): 7-11.
+#' \url{https://CRAN.R-project.org/doc/Rnews/Rnews_2006-1.pdf}.
+#'
+#' @keywords models
+#'
+#' @examples
+#'
+#'    \dontrun{
+#'    data(painters)
+#'    new.painters <- painters[,1:4]
+#'    cuts <- apply(new.painters, 2, quantile, c(.25, .50, .75))
+#'    for (i in 1:4){
+#'       new.painters[new.painters[,i]<cuts[1,i],i] <- 100
+#'      new.painters[new.painters[,i]<cuts[2,i],i] <- 200
+#'      new.painters[new.painters[,i]<cuts[3,i],i] <- 300
+#'      new.painters[new.painters[,i]<100,i] <- 400
+#'    }
+#'
+#'    posterior <- MCMCordfactanal(~Composition+Drawing+Colour+Expression,
+#'                         data=new.painters, factors=1,
+#'                         lambda.constraints=list(Drawing=list(2,"+")),
+#'                         burnin=5000, mcmc=500000, thin=200, verbose=500,
+#'                         L0=0.5, store.lambda=TRUE,
+#'                         store.scores=TRUE, tune=1.2)
+#'    plot(posterior)
+#'    summary(posterior)
+#'    }
+#'
 "MCMCordfactanalExperiment" <-
   function(x, treatment, factors, lambda.constraints=list(),
            data=parent.frame(), burnin = 1000, mcmc = 20000,
