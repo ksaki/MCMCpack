@@ -146,14 +146,19 @@
 #'    }
 #'
 "MCMCordfactanalExperiment" <-
-  function(x, treatment, factors, lambda.constraints=list(),
+  function(x, treatment, cov_phi = NA, cov_tau = NA,
+           factors, lambda.constraints=list(),
            data=parent.frame(), burnin = 1000, mcmc = 20000,
            thin=1, tune=NA, verbose = 0, seed = NA,
            lambda.start = NA, l0=0, L0=0,
            store.lambda=TRUE, store.scores=FALSE,
            drop.constantvars=TRUE, ... ) {
 
+    if (factors>1){
+      stop("factors > 1 is not supported yet")
+    }
     ## TODO: Remove case.switch flag later
+
     ## check for MCMCirtKd special case, this is used to tell the R
     ## and C++ code what to echo (1 if regular, 2 if MCMCirtKd)
     ## the test is based on the existence of model="MCMCirtKd"
@@ -240,8 +245,10 @@
     }
 
     #################################################
-    ## TODO: Take care of treatment assignment matrix
-    ## check dimensions. It must be the same as X matrix
+    ## TODO: guard sentences for new inputs 
+    ## treatments: check dimensions. It must be the same as X matrix
+    ## cov_phi, cov_tau: check dimensions. If NA, generate
+    ##                   placeholders
     #################################################
 
 
@@ -381,6 +388,10 @@
                     Xrow = as.integer(nrow(X)),
                     Xcol = as.integer(ncol(X)),
                     treatment = as.integer(treatment),
+                    cov_phi = as.double(cov_phi),
+                    cov_phicol = as.integer(ncol(cov_phi)),
+                    cov_tau = as.double(cov_tau),
+                    cov_taucol = as.integer(ncol(cov_tau)),
                     burnin = as.integer(burnin),
                     mcmc = as.integer(mcmc),
                     thin = as.integer(thin),

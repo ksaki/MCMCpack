@@ -30,6 +30,8 @@ template <typename RNGTYPE>
 void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         const Matrix<int>& X,
         const Matrix<int>& treatment,
+        const Matrix<>& cov_phi,
+        const Matrix<>& cov_tau,
         Matrix<>& Lambda,
 			  Matrix<>& gamma, const Matrix<>& ncateg,
 			  const Matrix<>& Lambda_eq,
@@ -66,6 +68,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   //Matrix<double> phi = stream->rnorm(N, D-1);
   phi = cbind(ones<double>(N,1), phi);
   Matrix<> Xstar(N, K);
+  Matrix<> tau(N, H); // first col of tau should be zero (control group)
 
   // storage matrices (row major order)
   Matrix<> Lambda_store;
@@ -76,6 +79,10 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   Matrix<> phi_store;
   if (storescores){
     phi_store = Matrix<>(nsamp, N*D);
+  }
+  Matrix<> tau_store;
+  if (storescores){
+    tau_store = Matrix<>(nsamp, N*H);
   }
  
   ///////////////////
@@ -242,6 +249,8 @@ extern "C"{
 		   const int* samplecol,
 		   const int* Xdata, const int* Xrow, const int* Xcol,
        const int* treatmentdata,
+       const double *cov_phidata, const int* cov_phicol,
+       const double *cov_taudata, const int* cov_taucol,
 		   const int* burnin, const int* mcmc,  const int* thin,
 		   const double* tune, const int *uselecuyer, 
 		   const int *seedarray,
@@ -266,6 +275,8 @@ extern "C"{
     // put together matrices
     const Matrix<int> X(*Xrow, *Xcol, Xdata);
     const Matrix<int> treatment(*Xrow, *Xcol, treatmentdata);
+    const Matrix<double> cov_phi(*Xrow, *cov_phicol, cov_phidata);
+    const Matrix<double> cov_tau(*Xrow, *cov_taucol, cov_phidata);
     Matrix<> Lambda(*Lamstartrow, *Lamstartcol, Lamstartdata);
     Matrix<> gamma(*gamrow, *gamcol, gamdata);
     const Matrix<> ncateg(*ncatrow, *ncatcol, ncatdata);
@@ -281,7 +292,7 @@ extern "C"{
     // return output
     Matrix<double> output;
     MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl,
-         X, treatment, Lambda, gamma,
+         X, treatment, cov_phi, cov_tau, Lambda, gamma,
 			   ncateg, Lambda_eq, Lambda_ineq, Lambda_prior_mean,
 			   Lambda_prior_prec, tune, *storelambda, 
 			   *storescores, *outswitch,
