@@ -153,24 +153,25 @@
            store.lambda=TRUE, store.scores=FALSE,
            drop.constantvars=TRUE, ... ) {
 
-    ### check for MCMCirtKd special case, this is used to tell the R
-    ### and C++ code what to echo (1 if regular, 2 if MCMCirtKd)
-    ### the test is based on the existence of model="MCMCirtKd"
-    ### passed through ...
-    #args <- list(...)
+    ## TODO: Remove case.switch flag later
+    ## check for MCMCirtKd special case, this is used to tell the R
+    ## and C++ code what to echo (1 if regular, 2 if MCMCirtKd)
+    ## the test is based on the existence of model="MCMCirtKd"
+    ## passed through ...
+    args <- list(...)
 
-    #if (length(args$model) > 0){ # if model arg is passed
-    #  if (args$model=="MCMCirtKd"){
-    #    case.switch <- 2
-    #    echo.name <- "MCMCirtKd"
-    #  }
-    #  ## could allow for other possibities here but not clear what they
-    #  ## would be
-    #}
-    #else { # if model arg not passed then assume MCMCordfactanal
-    #  case.switch <- 1
-    #  echo.name <- "MCMCordfactanal"
-    #}
+    if (length(args$model) > 0){ # if model arg is passed
+      if (args$model=="MCMCirtKd"){
+        case.switch <- 2
+        echo.name <- "MCMCirtKd"
+      }
+      ## could allow for other possibities here but not clear what they
+      ## would be
+    }
+    else { # if model arg not passed then assume MCMCordfactanal
+      case.switch <- 1
+      echo.name <- "MCMCordfactanal"
+    }
 
 
     # extract X and variable names from the model formula and frame
@@ -238,7 +239,11 @@
       xobs <- 1:N
     }
 
+    #################################################
     ## TODO: Take care of treatment assignment matrix
+    ## check dimensions. It must be the same as X matrix
+    #################################################
+
 
     check.offset(list(...))
     check.mcmc.parameters(burnin, mcmc, thin)
@@ -375,6 +380,7 @@
                     X = as.integer(X),
                     Xrow = as.integer(nrow(X)),
                     Xcol = as.integer(ncol(X)),
+                    treatment = as.integer(treatment),
                     burnin = as.integer(burnin),
                     mcmc = as.integer(mcmc),
                     thin = as.integer(thin),

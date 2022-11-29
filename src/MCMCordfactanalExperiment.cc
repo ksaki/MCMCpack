@@ -1,29 +1,5 @@
 //////////////////////////////////////////////////////////////////////////
-// MCMCordfactanal.cc is C++ code to estimate an ordinal data 
-// factor analysis model
-//
-// Andrew D. Martin
-// Dept. of Political Science
-// Washington University in St. Louis
-// admartin@wustl.edu
-//
-// Kevin M. Quinn
-// Dept. of Government
-// Harvard University
-// kevin_quinn@harvard.edu
-// 
-// This software is distributed under the terms of the GNU GENERAL
-// PUBLIC LICENSE Version 2, June 1991.  See the package LICENSE
-// file for more information.
-//
-// revised version of older MCMCordfactanal 
-// 7/16/2004 KQ
-// updated to new version of Scythe ADM 7/24/2004
-// fixed a bug pointed out by Alexander Raach 1/16/2005 KQ
-//
-// Copyright (C) 2003-2007 Andrew D. Martin and Kevin M. Quinn
-// Copyright (C) 2007-present Andrew D. Martin, Kevin M. Quinn,
-//    and Jong Hee Park
+//  Working in Progress: MCMCordfactanal for Experiment data 
 //////////////////////////////////////////////////////////////////////////
 
 
@@ -52,7 +28,9 @@ using namespace scythe;
 
 template <typename RNGTYPE>
 void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
-        const Matrix<int>& X, Matrix<>& Lambda,
+        const Matrix<int>& X,
+        const Matrix<int>& treatment,
+        Matrix<>& Lambda,
 			  Matrix<>& gamma, const Matrix<>& ncateg,
 			  const Matrix<>& Lambda_eq,
 			  const Matrix<>& Lambda_ineq,
@@ -69,6 +47,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   const unsigned int K = X.cols();  // number of manifest variables
   const unsigned int N = X.rows();  // number of observations
   const unsigned int D = Lambda.cols();  // # of factors (incl constant)
+  const unsigned int H = *max_element(treatment.begin(), treatment.end()); // # of treatment arms 
   const unsigned int tot_iter = burnin + mcmc;  
   const unsigned int nsamp = mcmc / thin;
   const Matrix<> I = eye<double>(D-1);
@@ -262,6 +241,7 @@ extern "C"{
   ordfactanalpostExperiment (double* sampledata, const int* samplerow, 
 		   const int* samplecol,
 		   const int* Xdata, const int* Xrow, const int* Xcol,
+       const int* treatmentdata,
 		   const int* burnin, const int* mcmc,  const int* thin,
 		   const double* tune, const int *uselecuyer, 
 		   const int *seedarray,
@@ -285,6 +265,7 @@ extern "C"{
 
     // put together matrices
     const Matrix<int> X(*Xrow, *Xcol, Xdata);
+    const Matrix<int> treatment(*Xrow, *Xcol, treatmentdata);
     Matrix<> Lambda(*Lamstartrow, *Lamstartcol, Lamstartdata);
     Matrix<> gamma(*gamrow, *gamcol, gamdata);
     const Matrix<> ncateg(*ncatrow, *ncatcol, ncatdata);
@@ -295,12 +276,12 @@ extern "C"{
     const Matrix<> Lambda_prior_prec(*Lampprecrow, *Lamppreccol,
 				     Lampprecdata);  
     Matrix<int> accepts(*acceptsrow, *acceptscol, acceptsdata);
-
 			
 			
     // return output
     Matrix<double> output;
-    MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl, X, Lambda, gamma,
+    MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl,
+         X, treatment, Lambda, gamma,
 			   ncateg, Lambda_eq, Lambda_ineq, Lambda_prior_mean,
 			   Lambda_prior_prec, tune, *storelambda, 
 			   *storescores, *outswitch,
