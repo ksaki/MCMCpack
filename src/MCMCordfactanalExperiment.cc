@@ -110,12 +110,12 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     // with treatment
     for (unsigned int i = 0; i < N; ++i) {
       for (unsigned int j = 0; j < K; ++j) {
-        unsigned int h = treatment(i,j);
 
         //XXX: X_mean is NaN randomly? 
+        unsigned int h = treatment(i,j);
         Matrix<> X_mean = Lambda(j,_) * t(phi(i,_)) + Lambda(j,1) * tau(i,h);
-        cout << "X_mean: " << X_mean << "\n";
-        cout << "Added part: " << Lambda(j,1) * tau(i,h) << "\n";
+        //cout << "X_mean: " << X_mean << "\n";
+        //cout << "Added part: " << Lambda(j,1) * tau(i,h) << "\n";
         
         if (X(i,j) == -999) { // if missing
           Xstar(i,j) = stream.rnorm(X_mean(0,0), 1.0);
@@ -132,18 +132,33 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
     Matrix<> phi_post_C = cholesky(phi_post_var);
     for (unsigned int i = 0; i < N; ++i) {
+      // Original
       //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
 		  //		       * (t(Xstar(i,_))-Lambda_const));
-      // with covariates for phi
+      
+      // With treatment and covariates for phi
+      Matrix<> tau_obs(1, K);
+      for (unsigned int j = 0; j < K; ++j) {
+        unsigned int h = treatment(i,j);
+        tau_obs(1,j) = tau(i,h);
+      }
+      Matrix<> Lambda_treat = t(Lambda_rest) * t(tau_obs);
       Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
-					       * (t(Xstar(i,_))-Lambda_const) + cov_phi(i,_) * coef_phi);
+					       * (t(Xstar(i,_))-Lambda_const-Lambda_treat) + cov_phi(i,_) * coef_phi);
+
       Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
 				phi_post_mean);
       for (unsigned int j = 0; j < (D-1); ++j)
-	phi(i,j+1) = phi_samp(j);
+	      phi(i,j+1) = phi_samp(j);
     }
 				
     // sample Lambda
+    // TODO: Cannot sample Lambda_j together becasue phi_obs depends on j?
+    //Matrix<> phi_obs = phi;
+    //for (unsigned int i = 0; i < N; ++i){
+    //  unsigned int h = treatment(i,j);
+    //  phi_obs(i,0) += tau(i,h);
+    //}
     NormNormfactanal_Lambda_draw(Lambda, Lambda_free_indic, 
 				 Lambda_prior_mean, Lambda_prior_prec,
 				 phi, Xstar, Psi_inv, Lambda_ineq, D, K,
@@ -155,53 +170,58 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       Matrix<> gamma_p = gamma(_,j);
       Matrix<> X_mean = phi * t(Lambda(j,_));
       for (unsigned int i = 2; i < (ncateg(j)); ++i) {
-	if (i == (ncateg(j)-1)) {
-	  gamma_p(i) = stream.rtbnorm_combo(gamma(i,j), 
-					    std::pow(tune[j], 2.0), gamma_p[i-1]);
-	} else {
-	  gamma_p[i] = stream.rtnorm_combo(gamma(i,j), 
-					   std::pow(tune[j], 2.0), gamma_p[i-1], gamma(i+1, j));
-	}
+        if (i == (ncateg(j)-1)) {
+          gamma_p(i) = stream.rtbnorm_combo(gamma(i,j), 
+                    std::pow(tune[j], 2.0), gamma_p[i-1]);
+        } else {
+          gamma_p[i] = stream.rtnorm_combo(gamma(i,j), 
+                   std::pow(tune[j], 2.0), gamma_p[i-1], gamma(i+1, j));
+        }
       }
       double loglikerat = 0.0;
       double loggendenrat = 0.0;
 			
 			
       // loop over observations and construct the acceptance ratio
+      // To adjust treatment effect, 
+      // subtract appropriate beta_j * tau after -X_mean
       for (unsigned int i = 0; i < N; ++i) {
-	if (X(i,j) != -999) {
-	  if (X(i,j) == ncateg(j)) {
-	    loglikerat = loglikerat + 
-	      log(1.0  - pnorm(gamma_p[X(i,j)-1] - X_mean[i], 0, 1) ) 
-	      - log(1.0 - pnorm(gamma(X(i,j)-1,j) - X_mean[i], 0, 1) );
-	  } else if (X(i,j) == 1) { 
-	    loglikerat = loglikerat + 
-	      log(pnorm(gamma_p[X(i,j)] - X_mean[i], 0, 1)  ) 
-	      - log(pnorm(gamma(X(i,j), j) - X_mean[i], 0, 1) );
-	  } else { 
-	    loglikerat = loglikerat + 
-	      log(pnorm(gamma_p[X(i,j)] - X_mean[i], 0, 1) 
-		  - pnorm(gamma_p[X(i,j)-1] - X_mean[i], 0, 1) ) 
-	      - log(pnorm(gamma(X(i,j), j) - X_mean[i], 0, 1) - 
-		    pnorm(gamma(X(i,j)-1, j) - X_mean[i], 0, 1) ); 
-	  }
-	}
+        unsigned int h = treatment(i,j);
+        Matrix<> X_mean_treat = Lambda(j,1) * tau(i,h);
+        if (X(i,j) != -999) {
+          if (X(i,j) == ncateg(j)) {
+            loglikerat = loglikerat + 
+              log(1.0  - pnorm(gamma_p[X(i,j)-1] - X_mean[i] - X_mean_treat[0], 0, 1) ) 
+              - log(1.0 - pnorm(gamma(X(i,j)-1,j) - X_mean[i] - X_mean_treat[0], 0, 1) );
+          } else if (X(i,j) == 1) { 
+            loglikerat = loglikerat + 
+              log(pnorm(gamma_p[X(i,j)] - X_mean[i] - X_mean_treat[0], 0, 1)  ) 
+              - log(pnorm(gamma(X(i,j), j) - X_mean[i] - X_mean_treat[0], 0, 1) );
+          } else { 
+            loglikerat = loglikerat + 
+              log(pnorm(gamma_p[X(i,j)] - X_mean[i] - X_mean_treat[0], 0, 1) 
+            - pnorm(gamma_p[X(i,j)-1] - X_mean[i] - X_mean_treat[0], 0, 1) ) 
+              - log(pnorm(gamma(X(i,j), j) - X_mean[i] - X_mean_treat[0], 0, 1) - 
+              pnorm(gamma(X(i,j)-1, j) - X_mean[i] - X_mean_treat[0], 0, 1) ); 
+          }
+        }
       }
 
       for (unsigned int k = 2; k < ncateg(j); ++k) {
-	loggendenrat = loggendenrat 
-	  + log(pnorm(gamma(k+1,j), gamma(k,j), tune[j]) - 
-		pnorm(gamma_p[k-1], gamma(k,j), tune[j]) )  - 
-	  log(pnorm(gamma_p[k+1], gamma_p[k], tune[j]) -
-	      pnorm(gamma(k-1,j), gamma_p[k], tune[j]) );
+        loggendenrat = loggendenrat 
+          + log(pnorm(gamma(k+1,j), gamma(k,j), tune[j]) - 
+          pnorm(gamma_p[k-1], gamma(k,j), tune[j]) )  - 
+          log(pnorm(gamma_p[k+1], gamma_p[k], tune[j]) -
+              pnorm(gamma(k-1,j), gamma_p[k], tune[j]) );
       }
+
       double logacceptrat = loglikerat + loggendenrat;
       if (stream() <= exp(logacceptrat)) { 
-	for (unsigned int i = 0; i < gamma.rows(); ++i) {
-	  if (gamma(i,j) == 300) break;
-	  gamma(i,j) = gamma_p[i];
-	}
-	++accepts(j);
+        for (unsigned int i = 0; i < gamma.rows(); ++i) {
+          if (gamma(i,j) == 300) break;
+          gamma(i,j) = gamma_p[i];
+        }
+        ++accepts(j);
       }
     }
 	
@@ -243,9 +263,9 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 
       // store phi
       if (storescores) {
-	//Matrix<> phi_store_vec = reshape(phi, 1, N*D);
-	//for (unsigned int l = 0; l < N * D; ++l)
-	//	phi_store(count, l) = phi_store_vec(l);
+      //Matrix<> phi_store_vec = reshape(phi, 1, N*D);
+      //for (unsigned int l = 0; l < N * D; ++l)
+      //	phi_store(count, l) = phi_store_vec(l);
         rmview(phi_store(count, _)) = phi;
       }
       count++;
