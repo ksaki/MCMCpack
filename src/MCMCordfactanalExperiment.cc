@@ -96,15 +96,29 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   for (unsigned int iter = 0; iter < tot_iter; ++iter) {
 
     // sample Xstar
+    // Original
+    //for (unsigned int i = 0; i < N; ++i) {
+    //  Matrix<> X_mean = Lambda * t(phi(i,_));
+    //  for (unsigned int j = 0; j < K; ++j) {
+    //    if (X(i,j) == -999) { // if missing
+    //      Xstar(i,j) = stream.rnorm(X_mean[j], 1.0);
+    //    } else { // if not missing
+    //      Xstar(i,j) = stream.rtnorm_combo(X_mean[j], 1.0, 
+    //               gamma(X(i,j)-1, j), gamma(X(i,j), j));
+    //    }
+    //  }
+    //}
+    // With treatment
     for (unsigned int i = 0; i < N; ++i) {
-      Matrix<> X_mean = Lambda * t(phi(i,_));
       for (unsigned int j = 0; j < K; ++j) {
-	if (X(i,j) == -999) { // if missing
-	  Xstar(i,j) = stream.rnorm(X_mean[j], 1.0);
-	} else { // if not missing
-	  Xstar(i,j) = stream.rtnorm_combo(X_mean[j], 1.0, 
-					   gamma(X(i,j)-1, j), gamma(X(i,j), j));
-	}
+        unsigned int h = treatment(i,j);
+        Matrix<> X_mean = Lambda(j,_) * t(phi(i,_)) + Lambda(j,1) * tau(i,h);
+        if (X(i,j) == -999) { // if missing
+          Xstar(i,j) = stream.rnorm(X_mean(0,0), 1.0);
+        } else { // if not missing
+          Xstar(i,j) = stream.rtnorm_combo(X_mean(0,0), 1.0, 
+                   gamma(X(i,j)-1, j), gamma(X(i,j), j));
+        }
       }
     }
 
@@ -114,9 +128,10 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
     Matrix<> phi_post_C = cholesky(phi_post_var);
     for (unsigned int i = 0; i < N; ++i) {
+      // Original
       //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
 		  //		       * (t(Xstar(i,_))-Lambda_const));
-      // with covariates for phi
+      // With covariates for phi
       Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
 					       * (t(Xstar(i,_))-Lambda_const) + cov_phi(i,_) * coef_phi);
       Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
@@ -283,7 +298,7 @@ extern "C"{
     const Matrix<int> X(*Xrow, *Xcol, Xdata);
     const Matrix<int> treatment(*Xrow, *Xcol, treatmentdata);
     const Matrix<double> cov_phi(*Xrow, *cov_phicol, cov_phidata);
-    const Matrix<double> cov_tau(*Xrow, *cov_taucol, cov_phidata);
+    const Matrix<double> cov_tau(*Xrow, *cov_taucol, cov_taudata);
     Matrix<> Lambda(*Lamstartrow, *Lamstartcol, Lamstartdata);
     Matrix<> gamma(*gamrow, *gamcol, gamdata);
     const Matrix<> ncateg(*ncatrow, *ncatcol, ncatdata);
