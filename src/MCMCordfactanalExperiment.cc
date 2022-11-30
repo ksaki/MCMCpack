@@ -153,16 +153,25 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
 				
     // sample Lambda
+    NormNormfactanal_Lambda_draw(Lambda, Lambda_free_indic, 
+				 Lambda_prior_mean, Lambda_prior_prec,
+				 phi, Xstar, Psi_inv, Lambda_ineq, D, K,
+				 stream);
     // TODO: Cannot sample Lambda_j together becasue phi_obs depends on j?
+    // Loop over j and fill Lambda one by one ?
     //Matrix<> phi_obs = phi;
     //for (unsigned int i = 0; i < N; ++i){
     //  unsigned int h = treatment(i,j);
     //  phi_obs(i,0) += tau(i,h);
     //}
-    NormNormfactanal_Lambda_draw(Lambda, Lambda_free_indic, 
-				 Lambda_prior_mean, Lambda_prior_prec,
-				 phi, Xstar, Psi_inv, Lambda_ineq, D, K,
-				 stream);
+    // XXX: Cannot pass Lambda(j,_) because it's a reference ot Lambda...
+    // make a copy and fill?
+    //for (unsigned int j = 0; j < K; ++j){
+    //  NormNormfactanal_Lambda_draw(Lambda(j,_), Lambda_free_indic(j,_), 
+    //       Lambda_prior_mean, Lambda_prior_prec,
+    //       phi, Xstar, Psi_inv, Lambda_ineq, D, 1, // set K = 1
+    //       stream);
+    //}
 
     // sample gamma
     for (unsigned int j = 0; j < K; ++j) { 
