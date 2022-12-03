@@ -153,25 +153,32 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
 				
     // sample Lambda
-    NormNormfactanal_Lambda_draw(Lambda, Lambda_free_indic, 
-				 Lambda_prior_mean, Lambda_prior_prec,
-				 phi, Xstar, Psi_inv, Lambda_ineq, D, K,
-				 stream);
-    // TODO: Cannot sample Lambda_j together becasue phi_obs depends on j?
-    // Loop over j and fill Lambda one by one ?
-    //Matrix<> phi_obs = phi;
-    //for (unsigned int i = 0; i < N; ++i){
-    //  unsigned int h = treatment(i,j);
-    //  phi_obs(i,0) += tau(i,h);
-    //}
-    // XXX: Cannot pass Lambda(j,_) because it's a reference ot Lambda...
+    // Original:
+    //NormNormfactanal_Lambda_draw(Lambda, Lambda_free_indic, 
+		//		 Lambda_prior_mean, Lambda_prior_prec,
+		//		 phi, Xstar, Psi_inv, Lambda_ineq, D, K,
+		//		 stream);
+    // New scheme:
     // make a copy and fill?
-    //for (unsigned int j = 0; j < K; ++j){
-    //  NormNormfactanal_Lambda_draw(Lambda(j,_), Lambda_free_indic(j,_), 
-    //       Lambda_prior_mean, Lambda_prior_prec,
-    //       phi, Xstar, Psi_inv, Lambda_ineq, D, 1, // set K = 1
-    //       stream);
-    //}
+    // This is pretty memory inefficient. Think about how to make it more efficient
+    for (unsigned int j = 0; j < K; ++j){
+      Matrix<> Lambda_row = Lambda(j,_);
+      Matrix<> Lambda_free_indic_row = Lambda_free_indic(j,_);
+      Matrix<> Lambda_prior_mean_row = Lambda_prior_mean(j,_);
+      Matrix<> Lambda_prior_prec_row = Lambda_prior_prec(j,_);
+      Matrix<> phi_obs = phi;
+      for (unsigned int i = 0; i < N; ++i){
+        unsigned int h = treatment(i,j);
+        phi_obs(i,0) += tau(i,h);
+      }
+      Matrix<> Xstar_row = Xstar(_,j);
+      Matrix<> Lambda_ineq_row = Lambda_ineq(j,_);
+      NormNormfactanal_Lambda_draw(Lambda_row, Lambda_free_indic_row, 
+           Lambda_prior_mean_row, Lambda_prior_prec_row,
+           phi_obs, Xstar_row, Psi_inv, Lambda_ineq_row, D, 1, // set K = 1
+           stream);
+      Lambda(j,_) = Lambda_row;
+    }
 
     // sample gamma
     for (unsigned int j = 0; j < K; ++j) { 
