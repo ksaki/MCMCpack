@@ -1,4 +1,4 @@
-/////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////
 //  Working in Progress: MCMCordfactanal for Experiment data 
 //////////////////////////////////////////////////////////////////////////
 
@@ -50,7 +50,8 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   const unsigned int K = X.cols();  // number of manifest variables
   const unsigned int N = X.rows();  // number of observations
   const unsigned int D = Lambda.cols();  // # of factors (incl constant)
-  const unsigned int H = *max_element(treatment.begin(), treatment.end()); // # of treatment arms 
+  const unsigned int H = *max_element(treatment.begin(), treatment.end())+1; 
+                    // # of treatment arms (including control)
   const unsigned int tot_iter = burnin + mcmc;  
   const unsigned int nsamp = mcmc / thin;
   const Matrix<> I = eye<double>(D-1);
@@ -122,18 +123,14 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       for (unsigned int j = 0; j < K; ++j) {
         unsigned int h = treatment(i,j);
         Matrix<> treated_part = Lambda(j,1) * tau(i,h);
+        double X_mean_new = X_mean(j) + treated_part(0);
         if (X(i,j) == -999) { // if missing
-          Xstar(i,j) = stream.rnorm(X_mean[j] + treated_part[0], 1.0);
+          Xstar(i,j) = stream.rnorm(X_mean_new, 1.0);
         } else { // if not missing
-          Xstar(i,j) = stream.rtnorm_combo(X_mean[j] + treated_part[0], 1.0, 
+          Xstar(i,j) = stream.rtnorm_combo(X_mean_new, 1.0, 
                    gamma(X(i,j)-1, j), gamma(X(i,j), j));
         }
-        if (i == N-1 & j == K-1){
-          cout << "treated part: " << treated_part[0] << "\n";
-          cout << "Lambda(j,1): " << tau(i,h) << "\n";
-          cout << "tau(i,h): " << tau(i,h) << "\n";
-          cout << "Xstar(i,j): " << Xstar(i,j) << "\n";
-        }
+        Matrix<> el = Xstar(i,j);
       }
     }
     // /////////////////////////////////////////////////////////////////////////
@@ -289,10 +286,10 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 	      tot_iter);
       Rprintf("Lambda = \n");
       for (unsigned int i = 0; i < K; ++i) {
-	for (unsigned int j = 0; j < D; ++j) {
-	  Rprintf("%10.5f", Lambda(i,j));
-	}
-	Rprintf("\n");
+        for (unsigned int j = 0; j < D; ++j) {
+          Rprintf("%10.5f", Lambda(i,j));
+	      }
+	      Rprintf("\n");
       }
       Rprintf("\nMetropolis-Hastings acceptance rates = \n");
       for (unsigned int j = 0; j < K; ++j) { 
