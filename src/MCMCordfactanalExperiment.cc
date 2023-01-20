@@ -72,6 +72,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   Matrix<> Xstar(N, K);
   Matrix<> tau(N, H); // first col of tau should be zero (control group)
   Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
+  //TODO: add mixture to tau - column size should be more than 1
   Matrix<> coef_tau(cov_tau.cols(), 1); // coefficient of the mean of phi
 
   // storage matrices (row major order)
@@ -162,6 +163,42 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 	      phi(i,j+1) = phi_samp(j);
       /////////////////////////////////////////////////////////////////////////
     }
+    
+    /////////////////////////////////////////////////////////////////////////
+    // NOTE: TAU SAMPLER IS UNDER CONSTRUCTION! 
+    // sample tau
+    // for each treatment arm (H)
+    for (unsigned int h = 0; h < H; ++h){
+      // for each respondents (N)
+      for (unsigned int i = 0; i < N; ++i) {
+        // find j such that T_ij = h
+        // XXX: What if there is no such j?
+        for (unsigned int j = 0; j < K; ++j) {
+          if (treatment(i,j) == h){
+            break
+          }
+        }
+        Matrix<> Lambda_const = Lambda(j,0); // alpha_j
+        // beta - submatrix from top-left (j,1) to bottom-right (j,D-1)
+        // = the row of j except 0th column
+        Matrix<> Lambda_rest = Lambda(j, 1, j, D-1); 
+        Matrix<> tau_post_var = invpd(I + crossprod(Lambda_rest) );
+        Matrix<> tau_post_C = cholesky(tau_post_var);
+
+        Matrix<> Lambda_phi = t(Lambda_rest) * t(phi(i,_));
+       
+        //XXX: one column of coef_tau should be chosen when mixture is added
+        Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
+                   * (t(Xstar(i,j))-Lambda_const-Lambda_phi) 
+                   * + cov_tau(i,_) * coef_tau); 
+
+        Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(D-1, 1, 0, 1), 
+          tau_post_mean);
+        for (unsigned int j = 0; j < (D-1); ++j)
+          tau(i,j+1) = tau_samp(j);
+      }
+    }
+    /////////////////////////////////////////////////////////////////////////
 				
     // sample Lambda
     /////////////////////////////////////////////////////////////////////////
