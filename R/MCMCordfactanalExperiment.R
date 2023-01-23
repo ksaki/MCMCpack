@@ -366,13 +366,20 @@
       sample <- matrix(data=0, mcmc/thin, length(gamma))
     }
     else if (store.scores == TRUE && store.lambda == FALSE){
-      sample <- matrix(data=0, mcmc/thin, (factors+1)*N + length(gamma))
+      ##sample <- matrix(data=0, mcmc/thin, (factors+1)*N + length(gamma))
+      ## Add spaces for tau
+      # TODO: the # of treatment arms are tentatively set to 2 (including control)
+      sample <- matrix(data=0, mcmc/thin, 2*N + (factors+1)*N + length(gamma))
     }
     else if(store.scores == FALSE && store.lambda == TRUE) {
       sample <- matrix(data=0, mcmc/thin, K*(factors+1)+length(gamma))
     }
     else { # store.scores==TRUE && store.lambda==TRUE
-      sample <- matrix(data=0, mcmc/thin, K*(factors+1)+(factors+1)*N +
+      ##sample <- matrix(data=0, mcmc/thin, K*(factors+1)+(factors+1)*N +
+      ##                 length(gamma))
+      ## Add spcaes for tau
+      # TODO: the # of treatment arms are tentatively set to 2 (including control)
+      sample <- matrix(data=0, mcmc/thin, 2*N + K*(factors+1)+(factors+1)*N +
                        length(gamma))
     }
 
@@ -472,20 +479,25 @@
 
     if (store.scores==TRUE){
       if(case.switch==1) {
-      phi.names <- paste(paste("phi",
-                               rep(xobs, each=(factors+1)), sep="."),
-                         rep(1:(factors+1),(factors+1)), sep=".")
-      par.names <- c(par.names, phi.names)
+        phi.names <- paste(paste("phi",
+                                 rep(xobs, each=(factors+1)), sep="."),
+                           rep(1:(factors+1),(factors+1)), sep=".")
+        # Added to return tau #################################################
+        tau.names <- paste(paste("tau",
+                                 rep(xobs, each=(factors+1)), sep="."),
+                           rep(1:(factors+1),(factors+1)), sep=".")
+        #######################################################################
+        par.names <- c(par.names, phi.names, tau.names)
+
       }
       if(case.switch==2) {
-      phi.names <- paste(paste("theta",
-                               rep(xobs, each=(factors+1)), sep="."),
-                         rep(0:factors,(factors+1)), sep=".")
-      par.names <- c(par.names, phi.names)
+        phi.names <- paste(paste("theta",
+                                 rep(xobs, each=(factors+1)), sep="."),
+                           rep(0:factors,(factors+1)), sep=".")
+        par.names <- c(par.names, phi.names)
 
       }
     }
-
     varnames(output) <- par.names
 
     # get rid of columns for constrained parameters

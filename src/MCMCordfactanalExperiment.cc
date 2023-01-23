@@ -173,24 +173,28 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       for (unsigned int i = 0; i < N; ++i) {
         // find j such that T_ij = h
         // XXX: What if there is no such j?
+        unsigned int j_treat = 0;
         for (unsigned int j = 0; j < K; ++j) {
           if (treatment(i,j) == h){
-            break
+            j_treat = j;
+            break;
           }
         }
-        Matrix<> Lambda_const = Lambda(j,0); // alpha_j
+        Matrix<> Lambda_const = Lambda(j_treat, 0); // alpha_j
         // beta - submatrix from top-left (j,1) to bottom-right (j,D-1)
         // = the row of j except 0th column
-        Matrix<> Lambda_rest = Lambda(j, 1, j, D-1); 
+        Matrix<> Lambda_rest = Lambda(j_treat, 1, j_treat, D-1); 
         Matrix<> tau_post_var = invpd(I + crossprod(Lambda_rest) );
         Matrix<> tau_post_C = cholesky(tau_post_var);
 
-        Matrix<> Lambda_phi = t(Lambda_rest) * t(phi(i,_));
+        Matrix<> Lambda_phi = t(Lambda_rest) * phi(i,1); // phi's 0th col is constant part
        
         //XXX: one column of coef_tau should be chosen when mixture is added
         Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
-                   * (t(Xstar(i,j))-Lambda_const-Lambda_phi) 
-                   * + cov_tau(i,_) * coef_tau); 
+                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau); 
+
+        //cout << "dim of tau_post_C: " << tau_post_C.rows() << " " << tau_post_C.cols() << "\n"; 
+        //cout << "dim of tau_post_mean: " << tau_post_mean.rows() << " " << tau_post_mean.cols() << "\n"; 
 
         Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(D-1, 1, 0, 1), 
           tau_post_mean);
@@ -365,6 +369,14 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       //	phi_store(count, l) = phi_store_vec(l);
         rmview(phi_store(count, _)) = phi;
       }
+      
+      // store tau
+      if (storescores) {
+      //Matrix<> phi_store_vec = reshape(phi, 1, N*D);
+      //for (unsigned int l = 0; l < N * D; ++l)
+      //	phi_store(count, l) = phi_store_vec(l);
+        rmview(tau_store(count, _)) = tau;
+      }
       count++;
     }
 
@@ -380,6 +392,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   }
   if(storescores) {
     output = cbind(output, phi_store);
+    output = cbind(output, tau_store);
   }
 }
 
