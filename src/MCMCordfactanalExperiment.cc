@@ -32,7 +32,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         const Matrix<int>& treatment,
         const Matrix<>& cov_phi,
         const Matrix<>& cov_tau,
-        Matrix<>& tau,
+        Matrix<>& phi,
         Matrix<>& Lambda,
 			  Matrix<>& gamma, const Matrix<>& ncateg,
 			  const Matrix<>& Lambda_eq,
@@ -67,11 +67,15 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   //Rprintf("Switches are %i %i %i\n", storelambda, storescores, outswitch);
 
   // starting values for phi, Xstar, and gamma_p
-  Matrix<> phi(N, D-1);
+  // tentatively fix theta
+  //Matrix<> phi(N, D-1);
+  
   //Matrix<double> phi = stream->rnorm(N, D-1);
   phi = cbind(ones<double>(N,1), phi);
   Matrix<> Xstar(N, K);
-  //Matrix<> tau(N, H); // first col of tau should be zero (control group)
+
+  Matrix<> tau(N, H); // first col of tau should be zero (control group)
+  
   Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
   //TODO: add mixture to tau - column size should be more than 1
   Matrix<> coef_tau(cov_tau.cols(), 1); // coefficient of the mean of phi
@@ -137,72 +141,72 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
     // /////////////////////////////////////////////////////////////////////////
 
-    // sample phi
-    Matrix<> Lambda_const = Lambda(_,0);
-    Matrix<> Lambda_rest = Lambda(0, 1, K-1, D-1);
-    Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
-    Matrix<> phi_post_C = cholesky(phi_post_var);
-    for (unsigned int i = 0; i < N; ++i) {
-      // Original
-      /////////////////////////////////////////////////////////////////////////
-      //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
-		  // 		       * (t(Xstar(i,_))-Lambda_const));
-      /////////////////////////////////////////////////////////////////////////
-      // With treatment and covariates for phi
-      Matrix<> tau_obs(1, K);
-      for (unsigned int j = 0; j < K; ++j) {
-        unsigned int h = treatment(i,j);
-        tau_obs(1,j) = tau(i,h);
-      }
-      Matrix<> Lambda_treat = t(Lambda_rest) * t(tau_obs);
-      Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
-					       * (t(Xstar(i,_))-Lambda_const-Lambda_treat) + cov_phi(i,_) * coef_phi);
+    //// sample phi
+    //Matrix<> Lambda_const = Lambda(_,0);
+    //Matrix<> Lambda_rest = Lambda(0, 1, K-1, D-1);
+    //Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
+    //Matrix<> phi_post_C = cholesky(phi_post_var);
+    //for (unsigned int i = 0; i < N; ++i) {
+    //  // Original
+    //  /////////////////////////////////////////////////////////////////////////
+    //  //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
+		//  // 		       * (t(Xstar(i,_))-Lambda_const));
+    //  /////////////////////////////////////////////////////////////////////////
+    //  // With treatment and covariates for phi
+    //  Matrix<> tau_obs(1, K);
+    //  for (unsigned int j = 0; j < K; ++j) {
+    //    unsigned int h = treatment(i,j);
+    //    tau_obs(1,j) = tau(i,h);
+    //  }
+    //  Matrix<> Lambda_treat = t(Lambda_rest) * t(tau_obs);
+    //  Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
+		//			       * (t(Xstar(i,_))-Lambda_const-Lambda_treat) + cov_phi(i,_) * coef_phi);
 
-      Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
-				phi_post_mean);
-      for (unsigned int j = 0; j < (D-1); ++j)
-	      phi(i,j+1) = phi_samp(j);
-      /////////////////////////////////////////////////////////////////////////
-    }
+    //  Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
+		//		phi_post_mean);
+    //  for (unsigned int j = 0; j < (D-1); ++j)
+	  //    phi(i,j+1) = phi_samp(j);
+    //  /////////////////////////////////////////////////////////////////////////
+    //}
     
     /////////////////////////////////////////////////////////////////////////
     // NOTE: TAU SAMPLER IS UNDER CONSTRUCTION! 
     // sample tau
     // for each treatment arm (H)
-    //for (unsigned int h = 0; h < H; ++h){
-    //  // for each respondents (N)
-    //  for (unsigned int i = 0; i < N; ++i) {
-    //    // find j such that T_ij = h
-    //    // XXX: What if there is no such j?
-    //    unsigned int j_treat = 0;
-    //    for (unsigned int j = 0; j < K; ++j) {
-    //      if (treatment(i,j) == h){
-    //        j_treat = j;
-    //        break;
-    //      }
-    //    }
-    //    Matrix<> Lambda_const = Lambda(j_treat, 0); // alpha_j
-    //    // beta - submatrix from top-left (j,1) to bottom-right (j,D-1)
-    //    // = the row of j except 0th column
-    //    Matrix<> Lambda_rest = Lambda(j_treat, 1, j_treat, D-1); 
-    //    Matrix<> tau_post_var = invpd(I + crossprod(Lambda_rest) );
-    //    Matrix<> tau_post_C = cholesky(tau_post_var);
+    for (unsigned int h = 0; h < H; ++h){
+      // for each respondents (N)
+      for (unsigned int i = 0; i < N; ++i) {
+        // find j such that T_ij = h
+        // XXX: What if there is no such j?
+        unsigned int j_treat = 0;
+        for (unsigned int j = 0; j < K; ++j) {
+          if (treatment(i,j) == h){
+            j_treat = j;
+            break;
+          }
+        }
+        Matrix<> Lambda_const = Lambda(j_treat, 0); // alpha_j
+        // beta - submatrix from top-left (j,1) to bottom-right (j,D-1)
+        // = the row of j except 0th column
+        Matrix<> Lambda_rest = Lambda(j_treat, 1, j_treat, D-1); 
+        Matrix<> tau_post_var = invpd(I + crossprod(Lambda_rest) );
+        Matrix<> tau_post_C = cholesky(tau_post_var);
 
-    //    Matrix<> Lambda_phi = t(Lambda_rest) * phi(i,1); // phi's 0th col is constant part
-    //   
-    //    //XXX: one column of coef_tau should be chosen when mixture is added
-    //    Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
-    //               * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau); 
+        Matrix<> Lambda_phi = t(Lambda_rest) * phi(i,1); // phi's 0th col is constant part
+       
+        //XXX: one column of coef_tau should be chosen when mixture is added
+        Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
+                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau); 
 
-    //    //cout << "dim of tau_post_C: " << tau_post_C.rows() << " " << tau_post_C.cols() << "\n"; 
-    //    //cout << "dim of tau_post_mean: " << tau_post_mean.rows() << " " << tau_post_mean.cols() << "\n"; 
+        //cout << "dim of tau_post_C: " << tau_post_C.rows() << " " << tau_post_C.cols() << "\n"; 
+        //cout << "dim of tau_post_mean: " << tau_post_mean.rows() << " " << tau_post_mean.cols() << "\n"; 
 
-    //    Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(D-1, 1, 0, 1), 
-    //      tau_post_mean);
-    //    for (unsigned int j = 0; j < (D-1); ++j)
-    //      tau(i,j+1) = tau_samp(j);
-    //  }
-    //}
+        Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(D-1, 1, 0, 1), 
+          tau_post_mean);
+        for (unsigned int j = 0; j < (D-1); ++j)
+          tau(i,j+1) = tau_samp(j);
+      }
+    }
     /////////////////////////////////////////////////////////////////////////
 				
     // sample Lambda
@@ -407,7 +411,7 @@ extern "C"{
        const int* treatmentdata,
        const double *cov_phidata, const int* cov_phicol,
        const double *cov_taudata, const int* cov_taucol,
-       const double *taudata, const int* taucol,
+       const double *phidata, const int* phicol,
 		   const int* burnin, const int* mcmc,  const int* thin,
 		   const double* tune, const int *uselecuyer, 
 		   const int *seedarray,
@@ -434,7 +438,7 @@ extern "C"{
     const Matrix<int> treatment(*Xrow, *Xcol, treatmentdata);
     const Matrix<double> cov_phi(*Xrow, *cov_phicol, cov_phidata);
     const Matrix<double> cov_tau(*Xrow, *cov_taucol, cov_taudata);
-    Matrix<double> tau(*Xrow, *taucol, taudata);
+    Matrix<double> phi(*Xrow, *phicol, phidata);
     Matrix<> Lambda(*Lamstartrow, *Lamstartcol, Lamstartdata);
     Matrix<> gamma(*gamrow, *gamcol, gamdata);
     const Matrix<> ncateg(*ncatrow, *ncatcol, ncatdata);
@@ -450,7 +454,7 @@ extern "C"{
     // return output
     Matrix<double> output;
     MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl,
-         X, treatment, cov_phi, cov_tau, tau, Lambda, gamma,
+         X, treatment, cov_phi, cov_tau, phi, Lambda, gamma,
 			   ncateg, Lambda_eq, Lambda_ineq, Lambda_prior_mean,
 			   Lambda_prior_prec, tune, *storelambda, 
 			   *storescores, *outswitch,
