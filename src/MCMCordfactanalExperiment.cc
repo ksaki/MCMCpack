@@ -33,6 +33,8 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         const Matrix<>& cov_phi,
         const Matrix<>& cov_tau,
         Matrix<>& phi,
+        double* rho,
+        const int L,
         Matrix<>& Lambda,
 			  Matrix<>& gamma, const Matrix<>& ncateg,
 			  const Matrix<>& Lambda_eq,
@@ -78,7 +80,21 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   
   Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
   //TODO: add mixture to tau - column size should be more than 1
-  Matrix<> coef_tau(cov_tau.cols(), 1); // coefficient of the mean of phi
+  Matrix<> coef_tau(cov_tau.cols(), 1); // coefficient of the mean of tau
+  coef_tau(0,0) = 1;
+  coef_tau(0,1) = 1;
+
+  // pi
+  Matrix<> pi(L-1, 1);
+  //for (unsigned int l=0; l < L-1; ++l){
+  //  pi(l,1) = stream.rbeta(1, rho);
+  //}
+
+
+  // p
+  Matrix<> p(L, 1);
+  // Z (this can be an integer matrix, instead of double matrix)
+  Matrix<> Z(cov_tau.cols(), 1);
 
   // storage matrices (row major order)
   Matrix<> Lambda_store;
@@ -208,6 +224,11 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       }
     }
     /////////////////////////////////////////////////////////////////////////
+    // sample pi
+    //
+    // sample p
+    
+    // sample Z
 				
     // sample Lambda
     /////////////////////////////////////////////////////////////////////////
@@ -412,6 +433,8 @@ extern "C"{
        const double *cov_phidata, const int* cov_phicol,
        const double *cov_taudata, const int* cov_taucol,
        const double *phidata, const int* phicol,
+       double *rho,
+       unsigned int* L,
 		   const int* burnin, const int* mcmc,  const int* thin,
 		   const double* tune, const int *uselecuyer, 
 		   const int *seedarray,
@@ -454,7 +477,7 @@ extern "C"{
     // return output
     Matrix<double> output;
     MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl,
-         X, treatment, cov_phi, cov_tau, phi, Lambda, gamma,
+         X, treatment, cov_phi, cov_tau, phi, rho, *L, Lambda, gamma,
 			   ncateg, Lambda_eq, Lambda_ineq, Lambda_prior_mean,
 			   Lambda_prior_prec, tune, *storelambda, 
 			   *storescores, *outswitch,
