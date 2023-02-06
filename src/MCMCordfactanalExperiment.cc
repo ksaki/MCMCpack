@@ -26,6 +26,7 @@ typedef Matrix<double,Row,View> rmview;
 using namespace std;
 using namespace scythe;
 
+
 template <typename RNGTYPE>
 void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         const Matrix<int>& X,
@@ -33,7 +34,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         const Matrix<>& cov_phi,
         const Matrix<>& cov_tau,
         Matrix<>& phi,
-        double* rho,
         const int L,
         Matrix<>& Lambda,
 			  Matrix<>& gamma, const Matrix<>& ncateg,
@@ -65,6 +65,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 
   const Matrix<> Psi = eye<double>(K);
   const Matrix<> Psi_inv = eye<double>(K);
+  double rho = 3.0; // TODO: Later make this as user input?
 
   //Rprintf("Switches are %i %i %i\n", storelambda, storescores, outswitch);
 
@@ -86,15 +87,44 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 
   // pi
   Matrix<> pi(L-1, 1);
-  //for (unsigned int l=0; l < L-1; ++l){
-  //  pi(l,1) = stream.rbeta(1, rho);
-  //}
-
+  for (unsigned int l=0; l < L-1; ++l){
+    pi(l,0) = stream.rbeta(1, rho);
+  }
 
   // p
   Matrix<> p(L, 1);
-  // Z (this can be an integer matrix, instead of double matrix)
-  Matrix<> Z(cov_tau.cols(), 1);
+  Matrix<> logDPweight(L-1,1);
+  Matrix<> logpicomp(L-1,1);
+  for (unsigned int l=0; l < L-1; ++l){
+    logpicomp(l) = log(1-pi(l));
+  }
+  for (unsigned int l=1; l < L-1; ++l){
+    logDPweight(l,0) = logDPweight(l-1,0) + logpicomp(l,0);
+  }
+
+  p(0,0) = pi(0,0); 
+  double remain = 0;
+  for (unsigned int l=1; l < L-1; ++l){
+    p(l,0) = exp(log(pi(l,0)) + logDPweight(l,0));
+    remain += p(l,0);
+  }
+  p(L,0) = 1-remain;
+
+  // Z (this can be an integer matrix, instead of double matrix?)
+  // XXX: manual implementation of sample() in R
+  // check if r ~ runif() is less than each elemnt of p
+  Matrix<> Z(N, 1);
+  for (unsigned int i=0; i<N; ++i){
+    double r = stream.runif();
+    for (unsigned int l=0; l < (L+1); ++l){
+      if (l == L){ // fill with the last cluster if it's not filled yet
+        Z(i,0) = l;
+      } else if (r < p(l,0)){
+        Z(i,0) = l;
+        break; 
+      }
+    }
+  }
 
   // storage matrices (row major order)
   Matrix<> Lambda_store;
@@ -433,7 +463,6 @@ extern "C"{
        const double *cov_phidata, const int* cov_phicol,
        const double *cov_taudata, const int* cov_taucol,
        const double *phidata, const int* phicol,
-       double *rho,
        unsigned int* L,
 		   const int* burnin, const int* mcmc,  const int* thin,
 		   const double* tune, const int *uselecuyer, 
@@ -477,7 +506,7 @@ extern "C"{
     // return output
     Matrix<double> output;
     MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl,
-         X, treatment, cov_phi, cov_tau, phi, rho, *L, Lambda, gamma,
+         X, treatment, cov_phi, cov_tau, phi, *L, Lambda, gamma,
 			   ncateg, Lambda_eq, Lambda_ineq, Lambda_prior_mean,
 			   Lambda_prior_prec, tune, *storelambda, 
 			   *storescores, *outswitch,
