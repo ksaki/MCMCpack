@@ -111,16 +111,21 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   p(L,0) = 1-remain;
 
   // Z (this can be an integer matrix, instead of double matrix?)
-  // XXX: manual implementation of sample() in R
-  // check if r ~ runif() is less than each elemnt of p
   Matrix<> Z(N, 1);
+  // Z count to store count of Z
+  Matrix<> Zcount(L,1);
+
+  // manual implementation of sample() in R
+  // check if r ~ runif() is less than each elemnt of p
   for (unsigned int i=0; i<N; ++i){
     double r = stream.runif();
     for (unsigned int l=0; l < (L+1); ++l){
       if (l == L){ // fill with the last cluster if it's not filled yet
         Z(i,0) = l;
+        ++Zcount(l,0);
       } else if (r < p(l,0)){
         Z(i,0) = l;
+        ++Zcount(l,0);
         break; 
       }
     }
@@ -255,10 +260,43 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
     /////////////////////////////////////////////////////////////////////////
     // sample pi
-    //
+    Matrix<> ZcountMoreL(L, 1);
+    for (unsigned int l=(L-2); l<=0; --l){
+      ZcountMoreL(l,0) = ZcountMoreL(l+1,0) + Zcount(l+1,0);
+    }
+    for (unsigned int l=0; l<L; ++l){
+      pi(l,0) = stream.rbeta(1 + Zcount(l,0), rho + ZcountMoreL(l,0)); 
+    }
     // sample p
+    for (unsigned int l=0; l < L-1; ++l){
+      logpicomp(l) = log(1-pi(l));
+    }
+    for (unsigned int l=1; l < L-1; ++l){
+      logDPweight(l,0) = logDPweight(l-1,0) + logpicomp(l,0);
+    }
+
+    p(0,0) = pi(0,0); 
+    double remain = 0;
+    for (unsigned int l=1; l < L-1; ++l){
+      p(l,0) = exp(log(pi(l,0)) + logDPweight(l,0));
+      remain += p(l,0);
+    }
+    p(L,0) = 1-remain;
     
     // sample Z
+    for (unsigned int i=0; i<N; ++i){
+      double r = stream.runif();
+      for (unsigned int l=0; l < (L+1); ++l){
+        if (l == L){ // fill with the last cluster if it's not filled yet
+          Z(i,0) = l;
+          ++Zcount(l,0);
+        } else if (r < p(l,0)){
+          Z(i,0) = l;
+          ++Zcount(l,0);
+          break; 
+        }
+      }
+    }
 				
     // sample Lambda
     /////////////////////////////////////////////////////////////////////////
