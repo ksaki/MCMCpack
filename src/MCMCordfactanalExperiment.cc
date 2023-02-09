@@ -81,9 +81,9 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   
   Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
   //TODO: add mixture to tau - column size should be more than 1
-  Matrix<> coef_tau(cov_tau.cols(), 1); // coefficient of the mean of tau
-  coef_tau(0,0) = 1;
-  coef_tau(0,1) = 1;
+  Matrix<> coef_tau(cov_tau.cols(), L); // coefficient of the mean of tau
+  Matrix<> coef_tau_mean(cov_tau.cols(), 1); // its mean
+  Matrix<> coef_tau_cov = eye<double>(cov_tau.cols());// cov mat
 
   // pi
   Matrix<> pi(L-1, 1);
@@ -138,12 +138,12 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   }
   Matrix<> gamma_store(nsamp, gamma.size());
   Matrix<> phi_store;
+  Matrix<> tau_store;
+  Matrix<> Z_store;
   if (storescores){
     phi_store = Matrix<>(nsamp, N*D);
-  }
-  Matrix<> tau_store;
-  if (storescores){
     tau_store = Matrix<>(nsamp, N*H);
+    Z_store = Matrix<>(nsamp, N*H);
   }
   Matrix<> coef_phi_store(nsamp, coef_phi.rows());
   Matrix<> coef_tau_store(nsamp, coef_tau.rows());
@@ -245,9 +245,10 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 
         Matrix<> Lambda_phi = t(Lambda_rest) * phi(i,1); // phi's 0th col is constant part
        
+        // DEAR TOMORROW SAKI: You need to do this because you changed the column size of coef_tau 
         //XXX: one column of coef_tau should be chosen when mixture is added
         Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
-                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau); 
+                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau()); 
 
         //cout << "dim of tau_post_C: " << tau_post_C.rows() << " " << tau_post_C.cols() << "\n"; 
         //cout << "dim of tau_post_mean: " << tau_post_mean.rows() << " " << tau_post_mean.cols() << "\n"; 
@@ -297,6 +298,27 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         }
       }
     }
+    // sample eta (coef_tau)
+    // Check cMCMCregress.cc for the format of NormNormregress_beta_draw 
+    // line 91
+    for (unsigned int l=0; l < L; ++l){
+      // filter Ws nd taus that has lth component
+      unsigned int ZcountLUint = Zcount(l,0); // static cast for double-uint conversion?
+      Matrix<> WL(ZcountLUint, Zcount.cols());
+      Matrix<> tauL(ZcountLUint, tau.cols());
+      for (unsigned int i=0; i<N; ++i){
+        unsigned int il = 0;
+        if (Z(i,0)==l){ //double vs uint?
+          WL(il,_) = cov_tau(i,_);
+          tauL(il,_) = tau(i,_);
+          ++il;
+        }
+      }
+      Matrix<> WLpWL = crossprod(WL);
+      Matrix<> WLptauL = t(WL) * tauL;
+      coef_tau(_,l) = NormNormregress_beta_draw(WLpWL, WLptauL,
+          coef_tau_mean, coef_tau_cov, 1, stream);
+    }
 				
     // sample Lambda
     /////////////////////////////////////////////////////////////////////////
@@ -329,11 +351,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
     /////////////////////////////////////////////////////////////////////////
 
-
-    /////////////////////////////////////////////////////////////////////////
-    // XX: New sections to be added:
-    // Sample tau, eta (coef of the mean of tau) etc...
-    /////////////////////////////////////////////////////////////////////////
 
     // sample gamma
     for (unsigned int j = 0; j < K; ++j) { 
@@ -462,14 +479,8 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       //for (unsigned int l = 0; l < N * D; ++l)
       //	phi_store(count, l) = phi_store_vec(l);
         rmview(phi_store(count, _)) = phi;
-      }
-      
-      // store tau
-      if (storescores) {
-      //Matrix<> phi_store_vec = reshape(phi, 1, N*D);
-      //for (unsigned int l = 0; l < N * D; ++l)
-      //	phi_store(count, l) = phi_store_vec(l);
         rmview(tau_store(count, _)) = tau;
+        rmview(Z_store(count, _)) = Z;
       }
       count++;
     }
