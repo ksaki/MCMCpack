@@ -82,7 +82,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
   //TODO: add mixture to tau - column size should be more than 1
   Matrix<> coef_tau(cov_tau.cols(), L); // coefficient of the mean of tau
-  Matrix<> coef_tau_mean(cov_tau.cols(), 1); // its mean
+  Matrix<> coef_tau_mean(cov_tau.cols(), L); // its mean
   Matrix<> coef_tau_cov = eye<double>(cov_tau.cols());// cov mat
 
   // pi
@@ -227,6 +227,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     for (unsigned int h = 0; h < H; ++h){
       // for each respondents (N)
       for (unsigned int i = 0; i < N; ++i) {
+
         // find j such that T_ij = h
         // XXX: What if there is no such j?
         unsigned int j_treat = 0;
@@ -236,6 +237,8 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
             break;
           }
         }
+        // find l such that Z_i == l
+        unsigned int uintL = Z(i,0); 
         Matrix<> Lambda_const = Lambda(j_treat, 0); // alpha_j
         // beta - submatrix from top-left (j,1) to bottom-right (j,D-1)
         // = the row of j except 0th column
@@ -248,13 +251,12 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         // DEAR TOMORROW SAKI: You need to do this because you changed the column size of coef_tau 
         //XXX: one column of coef_tau should be chosen when mixture is added
         Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
-                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau()); 
+                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau(_,uintL)); 
 
-        //cout << "dim of tau_post_C: " << tau_post_C.rows() << " " << tau_post_C.cols() << "\n"; 
-        //cout << "dim of tau_post_mean: " << tau_post_mean.rows() << " " << tau_post_mean.cols() << "\n"; 
-
-        Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(D-1, 1, 0, 1), 
-          tau_post_mean);
+        // no need to use gaxpy beacuse this is one dim?
+        //Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(1, 1, 0, 1), 
+        //  tau_post_mean);
+        Matrix<> tau_samp = stream.rnorm(tau_post_mean(0,0), tau_post_C(0,0));
         for (unsigned int j = 0; j < (D-1); ++j)
           tau(i,j+1) = tau_samp(j);
       }
@@ -305,19 +307,19 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       // filter Ws nd taus that has lth component
       unsigned int ZcountLUint = Zcount(l,0); // static cast for double-uint conversion?
       Matrix<> WL(ZcountLUint, Zcount.cols());
-      Matrix<> tauL(ZcountLUint, tau.cols());
+      Matrix<> tauL(ZcountLUint, 1);
       for (unsigned int i=0; i<N; ++i){
         unsigned int il = 0;
         if (Z(i,0)==l){ //double vs uint?
           WL(il,_) = cov_tau(i,_);
-          tauL(il,_) = tau(i,_);
+          tauL(il,0) = tau(i,1); // XXX: fix "1" for multiple treatment arms
           ++il;
         }
       }
       Matrix<> WLpWL = crossprod(WL);
       Matrix<> WLptauL = t(WL) * tauL;
       coef_tau(_,l) = NormNormregress_beta_draw(WLpWL, WLptauL,
-          coef_tau_mean, coef_tau_cov, 1, stream);
+          t(coef_tau_mean(_,l)), coef_tau_cov, 1, stream);
     }
 				
     // sample Lambda
