@@ -81,7 +81,9 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   
   Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
   //TODO: add mixture to tau - column size should be more than 1
-  Matrix<> coef_tau(cov_tau.cols(), L); // coefficient of the mean of tau
+  //XXX: tentatively set all eta (coef_tau) to be 1 
+  Matrix<> coef_tau(cov_tau.cols(), L, true, 1); // coefficient of the mean of tau
+  //Matrix<> coef_tau(cov_tau.cols(), L); // coefficient of the mean of tau
   Matrix<> coef_tau_mean(cov_tau.cols(), L); // its mean
   Matrix<> coef_tau_cov = eye<double>(cov_tau.cols());// cov mat
 
@@ -263,64 +265,64 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
     /////////////////////////////////////////////////////////////////////////
     // sample pi
-    Matrix<> ZcountMoreL(L, 1);
-    for (unsigned int l=(L-2); l<=0; --l){
-      ZcountMoreL(l,0) = ZcountMoreL(l+1,0) + Zcount(l+1,0);
-    }
-    for (unsigned int l=0; l<L; ++l){
-      pi(l,0) = stream.rbeta(1 + Zcount(l,0), rho + ZcountMoreL(l,0)); 
-    }
-    // sample p
-    for (unsigned int l=0; l < L-1; ++l){
-      logpicomp(l) = log(1-pi(l));
-    }
-    for (unsigned int l=1; l < L-1; ++l){
-      logDPweight(l,0) = logDPweight(l-1,0) + logpicomp(l,0);
-    }
+    //Matrix<> ZcountMoreL(L, 1);
+    //for (unsigned int l=(L-2); l<=0; --l){
+    //  ZcountMoreL(l,0) = ZcountMoreL(l+1,0) + Zcount(l+1,0);
+    //}
+    //for (unsigned int l=0; l<L; ++l){
+    //  pi(l,0) = stream.rbeta(1 + Zcount(l,0), rho + ZcountMoreL(l,0)); 
+    //}
+    //// sample p
+    //for (unsigned int l=0; l < L-1; ++l){
+    //  logpicomp(l) = log(1-pi(l));
+    //}
+    //for (unsigned int l=1; l < L-1; ++l){
+    //  logDPweight(l,0) = logDPweight(l-1,0) + logpicomp(l,0);
+    //}
 
-    p(0,0) = pi(0,0); 
-    double remain = 0;
-    for (unsigned int l=1; l < L-1; ++l){
-      p(l,0) = exp(log(pi(l,0)) + logDPweight(l,0));
-      remain += p(l,0);
-    }
-    p(L,0) = 1-remain;
-    
-    // sample Z
-    for (unsigned int i=0; i<N; ++i){
-      double r = stream.runif();
-      for (unsigned int l=0; l < (L+1); ++l){
-        if (l == L){ // fill with the last cluster if it's not filled yet
-          Z(i,0) = l;
-          ++Zcount(l,0);
-        } else if (r < p(l,0)){
-          Z(i,0) = l;
-          ++Zcount(l,0);
-          break; 
-        }
-      }
-    }
-    // sample eta (coef_tau)
-    // Check cMCMCregress.cc for the format of NormNormregress_beta_draw 
-    // line 91
-    for (unsigned int l=0; l < L; ++l){
-      // filter Ws nd taus that has lth component
-      unsigned int ZcountLUint = Zcount(l,0); // static cast for double-uint conversion?
-      Matrix<> WL(ZcountLUint, Zcount.cols());
-      Matrix<> tauL(ZcountLUint, 1);
-      for (unsigned int i=0; i<N; ++i){
-        unsigned int il = 0;
-        if (Z(i,0)==l){ //double vs uint?
-          WL(il,_) = cov_tau(i,_);
-          tauL(il,0) = tau(i,1); // XXX: fix "1" for multiple treatment arms
-          ++il;
-        }
-      }
-      Matrix<> WLpWL = crossprod(WL);
-      Matrix<> WLptauL = t(WL) * tauL;
-      coef_tau(_,l) = NormNormregress_beta_draw(WLpWL, WLptauL,
-          t(coef_tau_mean(_,l)), coef_tau_cov, 1, stream);
-    }
+    //p(0,0) = pi(0,0); 
+    //double remain = 0;
+    //for (unsigned int l=1; l < L-1; ++l){
+    //  p(l,0) = exp(log(pi(l,0)) + logDPweight(l,0));
+    //  remain += p(l,0);
+    //}
+    //p(L,0) = 1-remain;
+    //
+    //// sample Z
+    //for (unsigned int i=0; i<N; ++i){
+    //  double r = stream.runif();
+    //  for (unsigned int l=0; l < (L+1); ++l){
+    //    if (l == L){ // fill with the last cluster if it's not filled yet
+    //      Z(i,0) = l;
+    //      ++Zcount(l,0);
+    //    } else if (r < p(l,0)){
+    //      Z(i,0) = l;
+    //      ++Zcount(l,0);
+    //      break; 
+    //    }
+    //  }
+    //}
+    //// sample eta (coef_tau)
+    //// Check cMCMCregress.cc for the format of NormNormregress_beta_draw 
+    //// line 91
+    ////for (unsigned int l=0; l < L; ++l){
+    //  // filter Ws nd taus that has lth component
+    //  unsigned int ZcountLUint = Zcount(l,0); // static cast for double-uint conversion?
+    //  Matrix<> WL(ZcountLUint, Zcount.cols());
+    //  Matrix<> tauL(ZcountLUint, 1);
+    //  for (unsigned int i=0; i<N; ++i){
+    //    unsigned int il = 0;
+    //    if (Z(i,0)==l){ //double vs uint?
+    //      WL(il,_) = cov_tau(i,_);
+    //      tauL(il,0) = tau(i,1); // XXX: fix "1" for multiple treatment arms
+    //      ++il;
+    //    }
+    //  }
+    //  Matrix<> WLpWL = crossprod(WL);
+    //  Matrix<> WLptauL = t(WL) * tauL;
+    //  coef_tau(_,l) = NormNormregress_beta_draw(WLpWL, WLptauL,
+    //      t(coef_tau_mean(_,l)), coef_tau_cov, 1, stream);
+    //}
 				
     // sample Lambda
     /////////////////////////////////////////////////////////////////////////
