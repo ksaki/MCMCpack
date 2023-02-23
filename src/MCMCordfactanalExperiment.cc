@@ -31,10 +31,7 @@ template <typename RNGTYPE>
 void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         const Matrix<int>& X,
         const Matrix<int>& treatment,
-        const Matrix<>& cov_phi,
-        const Matrix<>& cov_tau,
         Matrix<>& phi,
-        const int L,
         Matrix<>& Lambda,
 			  Matrix<>& gamma, const Matrix<>& ncateg,
 			  const Matrix<>& Lambda_eq,
@@ -65,7 +62,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
 
   const Matrix<> Psi = eye<double>(K);
   const Matrix<> Psi_inv = eye<double>(K);
-  double rho = 3.0; // TODO: Later make this as user input?
 
   //Rprintf("Switches are %i %i %i\n", storelambda, storescores, outswitch);
 
@@ -78,60 +74,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
   Matrix<> Xstar(N, K);
 
   Matrix<> tau(N, H); // first col of tau should be zero (control group)
-  
-  Matrix<> coef_phi(cov_phi.cols(), 1); // coefficient of the mean of phi
-  //TODO: add mixture to tau - column size should be more than 1
-  //XXX: tentatively set all eta (coef_tau) to be 1 
-  Matrix<> coef_tau(cov_tau.cols(), L, true, 1); // coefficient of the mean of tau
-  //Matrix<> coef_tau(cov_tau.cols(), L); // coefficient of the mean of tau
-  Matrix<> coef_tau_mean(cov_tau.cols(), L); // its mean
-  Matrix<> coef_tau_cov = eye<double>(cov_tau.cols());// cov mat
-
-  // pi
-  Matrix<> pi(L-1, 1);
-  for (unsigned int l=0; l < L-1; ++l){
-    pi(l,0) = stream.rbeta(1, rho);
-  }
-
-  // p
-  Matrix<> p(L, 1);
-  Matrix<> logDPweight(L-1,1);
-  Matrix<> logpicomp(L-1,1);
-  for (unsigned int l=0; l < L-1; ++l){
-    logpicomp(l) = log(1-pi(l));
-  }
-  for (unsigned int l=1; l < L-1; ++l){
-    logDPweight(l,0) = logDPweight(l-1,0) + logpicomp(l,0);
-  }
-
-  p(0,0) = pi(0,0); 
-  double remain = 0;
-  for (unsigned int l=1; l < L-1; ++l){
-    p(l,0) = exp(log(pi(l,0)) + logDPweight(l,0));
-    remain += p(l,0);
-  }
-  p(L,0) = 1-remain;
-
-  // Z (this can be an integer matrix, instead of double matrix?)
-  Matrix<> Z(N, 1);
-  // Z count to store count of Z
-  Matrix<> Zcount(L,1);
-
-  // manual implementation of sample() in R
-  // check if r ~ runif() is less than each elemnt of p
-  for (unsigned int i=0; i<N; ++i){
-    double r = stream.runif();
-    for (unsigned int l=0; l < (L+1); ++l){
-      if (l == L){ // fill with the last cluster if it's not filled yet
-        Z(i,0) = l;
-        ++Zcount(l,0);
-      } else if (r < p(l,0)){
-        Z(i,0) = l;
-        ++Zcount(l,0);
-        break; 
-      }
-    }
-  }
+  Matrix<> tau_mean(H, 1); // first row of tau should be zero (control group)
 
   // storage matrices (row major order)
   Matrix<> Lambda_store;
@@ -139,16 +82,13 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     Lambda_store = Matrix<double>(nsamp, K*D);
   }
   Matrix<> gamma_store(nsamp, gamma.size());
+  Matrix<> tau_mean_store(nsamp, H);
   Matrix<> phi_store;
   Matrix<> tau_store;
-  Matrix<> Z_store;
   if (storescores){
     phi_store = Matrix<>(nsamp, N*D);
     tau_store = Matrix<>(nsamp, N*H);
-    Z_store = Matrix<>(nsamp, N*H);
   }
-  Matrix<> coef_phi_store(nsamp, coef_phi.rows());
-  Matrix<> coef_tau_store(nsamp, coef_tau.rows());
 
   ///////////////////
   // Gibbs Sampler //
@@ -175,8 +115,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     //}
     // /////////////////////////////////////////////////////////////////////////
     // with treatment
-    //XXX: The seeds are not passed? Enabling this chunk causes randomness
-    // even if the seed is provided....
     for (unsigned int i = 0; i < N; ++i) {
       Matrix<> X_mean = Lambda * t(phi(i,_));
       for (unsigned int j = 0; j < K; ++j) {
@@ -194,33 +132,33 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     }
     // /////////////////////////////////////////////////////////////////////////
 
-    //// sample phi
-    //Matrix<> Lambda_const = Lambda(_,0);
-    //Matrix<> Lambda_rest = Lambda(0, 1, K-1, D-1);
-    //Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
-    //Matrix<> phi_post_C = cholesky(phi_post_var);
-    //for (unsigned int i = 0; i < N; ++i) {
-    //  // Original
-    //  /////////////////////////////////////////////////////////////////////////
-    //  //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
-		//  // 		       * (t(Xstar(i,_))-Lambda_const));
-    //  /////////////////////////////////////////////////////////////////////////
-    //  // With treatment and covariates for phi
-    //  Matrix<> tau_obs(1, K);
-    //  for (unsigned int j = 0; j < K; ++j) {
-    //    unsigned int h = treatment(i,j);
-    //    tau_obs(1,j) = tau(i,h);
-    //  }
-    //  Matrix<> Lambda_treat = t(Lambda_rest) * t(tau_obs);
-    //  Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
-		//			       * (t(Xstar(i,_))-Lambda_const-Lambda_treat) + cov_phi(i,_) * coef_phi);
+    // sample phi
+    Matrix<> Lambda_const = Lambda(_,0);
+    Matrix<> Lambda_rest = Lambda(0, 1, K-1, D-1);
+    Matrix<> phi_post_var = invpd(I + crossprod(Lambda_rest) );
+    Matrix<> phi_post_C = cholesky(phi_post_var);
+    for (unsigned int i = 0; i < N; ++i) {
+      // Original
+      /////////////////////////////////////////////////////////////////////////
+      //Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
+		  // 		       * (t(Xstar(i,_))-Lambda_const));
+      /////////////////////////////////////////////////////////////////////////
+      // With treatment and covariates for phi
+      Matrix<> tau_obs(1, K);
+      for (unsigned int j = 0; j < K; ++j) {
+        unsigned int h = treatment(i,j);
+        tau_obs(1,j) = tau(i,h);
+      }
+      Matrix<> Lambda_treat = t(Lambda_rest) * t(tau_obs);
+      Matrix<> phi_post_mean = phi_post_var * (t(Lambda_rest)  
+					       * (t(Xstar(i,_))-Lambda_const-Lambda_treat));
 
-    //  Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
-		//		phi_post_mean);
-    //  for (unsigned int j = 0; j < (D-1); ++j)
-	  //    phi(i,j+1) = phi_samp(j);
-    //  /////////////////////////////////////////////////////////////////////////
-    //}
+      Matrix<> phi_samp = gaxpy(phi_post_C, stream.rnorm(D-1, 1, 0, 1), 
+				phi_post_mean);
+      for (unsigned int j = 0; j < (D-1); ++j)
+	      phi(i,j+1) = phi_samp(j);
+      /////////////////////////////////////////////////////////////////////////
+    }
     
     /////////////////////////////////////////////////////////////////////////
     // NOTE: TAU SAMPLER IS UNDER CONSTRUCTION! 
@@ -239,8 +177,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
             break;
           }
         }
-        // find l such that Z_i == l
-        unsigned int uintL = Z(i,0); 
         Matrix<> Lambda_const = Lambda(j_treat, 0); // alpha_j
         // beta - submatrix from top-left (j,1) to bottom-right (j,D-1)
         // = the row of j except 0th column
@@ -253,7 +189,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
         // DEAR TOMORROW SAKI: You need to do this because you changed the column size of coef_tau 
         //XXX: one column of coef_tau should be chosen when mixture is added
         Matrix<> tau_post_mean = tau_post_var * (t(Lambda_rest)  
-                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + cov_tau(i,_) * coef_tau(_,uintL)); 
+                   * (Xstar(i,j_treat)-Lambda_const-Lambda_phi) + tau_mean(h,0)); 
 
         // no need to use gaxpy beacuse this is one dim?
         //Matrix<> tau_samp = gaxpy(tau_post_C, stream.rnorm(1, 1, 0, 1), 
@@ -263,66 +199,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
           tau(i,j+1) = tau_samp(j);
       }
     }
-    /////////////////////////////////////////////////////////////////////////
-    // sample pi
-    //Matrix<> ZcountMoreL(L, 1);
-    //for (unsigned int l=(L-2); l<=0; --l){
-    //  ZcountMoreL(l,0) = ZcountMoreL(l+1,0) + Zcount(l+1,0);
-    //}
-    //for (unsigned int l=0; l<L; ++l){
-    //  pi(l,0) = stream.rbeta(1 + Zcount(l,0), rho + ZcountMoreL(l,0)); 
-    //}
-    //// sample p
-    //for (unsigned int l=0; l < L-1; ++l){
-    //  logpicomp(l) = log(1-pi(l));
-    //}
-    //for (unsigned int l=1; l < L-1; ++l){
-    //  logDPweight(l,0) = logDPweight(l-1,0) + logpicomp(l,0);
-    //}
-
-    //p(0,0) = pi(0,0); 
-    //double remain = 0;
-    //for (unsigned int l=1; l < L-1; ++l){
-    //  p(l,0) = exp(log(pi(l,0)) + logDPweight(l,0));
-    //  remain += p(l,0);
-    //}
-    //p(L,0) = 1-remain;
-    //
-    //// sample Z
-    //for (unsigned int i=0; i<N; ++i){
-    //  double r = stream.runif();
-    //  for (unsigned int l=0; l < (L+1); ++l){
-    //    if (l == L){ // fill with the last cluster if it's not filled yet
-    //      Z(i,0) = l;
-    //      ++Zcount(l,0);
-    //    } else if (r < p(l,0)){
-    //      Z(i,0) = l;
-    //      ++Zcount(l,0);
-    //      break; 
-    //    }
-    //  }
-    //}
-    //// sample eta (coef_tau)
-    //// Check cMCMCregress.cc for the format of NormNormregress_beta_draw 
-    //// line 91
-    ////for (unsigned int l=0; l < L; ++l){
-    //  // filter Ws nd taus that has lth component
-    //  unsigned int ZcountLUint = Zcount(l,0); // static cast for double-uint conversion?
-    //  Matrix<> WL(ZcountLUint, Zcount.cols());
-    //  Matrix<> tauL(ZcountLUint, 1);
-    //  for (unsigned int i=0; i<N; ++i){
-    //    unsigned int il = 0;
-    //    if (Z(i,0)==l){ //double vs uint?
-    //      WL(il,_) = cov_tau(i,_);
-    //      tauL(il,0) = tau(i,1); // XXX: fix "1" for multiple treatment arms
-    //      ++il;
-    //    }
-    //  }
-    //  Matrix<> WLpWL = crossprod(WL);
-    //  Matrix<> WLptauL = t(WL) * tauL;
-    //  coef_tau(_,l) = NormNormregress_beta_draw(WLpWL, WLptauL,
-    //      t(coef_tau_mean(_,l)), coef_tau_cov, 1, stream);
-    //}
 				
     // sample Lambda
     /////////////////////////////////////////////////////////////////////////
@@ -476,6 +352,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       //for (unsigned int l = 0; l < gamma.size(); ++l) 
       //	gamma_store(count, l) = gamma_store_vec(l);
       rmview(gamma_store(count, _)) = gamma;
+      rmview(tau_mean_store(count, _)) = tau_mean;
 
       // store phi
       if (storescores) {
@@ -484,7 +361,6 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
       //	phi_store(count, l) = phi_store_vec(l);
         rmview(phi_store(count, _)) = phi;
         rmview(tau_store(count, _)) = tau;
-        rmview(Z_store(count, _)) = Z;
       }
       count++;
     }
@@ -503,6 +379,7 @@ void MCMCordfactanalExperiment_impl(rng<RNGTYPE>& stream,
     output = cbind(output, phi_store);
     output = cbind(output, tau_store);
   }
+  output = cbind(output, tau_mean_store);
 }
 
 extern "C"{
@@ -513,10 +390,7 @@ extern "C"{
 		   const int* samplecol,
 		   const int* Xdata, const int* Xrow, const int* Xcol,
        const int* treatmentdata,
-       const double *cov_phidata, const int* cov_phicol,
-       const double *cov_taudata, const int* cov_taucol,
        const double *phidata, const int* phicol,
-       unsigned int* L,
 		   const int* burnin, const int* mcmc,  const int* thin,
 		   const double* tune, const int *uselecuyer, 
 		   const int *seedarray,
@@ -541,8 +415,6 @@ extern "C"{
     // put together matrices
     const Matrix<int> X(*Xrow, *Xcol, Xdata);
     const Matrix<int> treatment(*Xrow, *Xcol, treatmentdata);
-    const Matrix<double> cov_phi(*Xrow, *cov_phicol, cov_phidata);
-    const Matrix<double> cov_tau(*Xrow, *cov_taucol, cov_taudata);
     Matrix<double> phi(*Xrow, *phicol, phidata);
     Matrix<> Lambda(*Lamstartrow, *Lamstartcol, Lamstartdata);
     Matrix<> gamma(*gamrow, *gamcol, gamdata);
@@ -559,7 +431,7 @@ extern "C"{
     // return output
     Matrix<double> output;
     MCMCPACK_PASSRNG2MODEL(MCMCordfactanalExperiment_impl,
-         X, treatment, cov_phi, cov_tau, phi, *L, Lambda, gamma,
+         X, treatment, phi, Lambda, gamma,
 			   ncateg, Lambda_eq, Lambda_ineq, Lambda_prior_mean,
 			   Lambda_prior_prec, tune, *storelambda, 
 			   *storescores, *outswitch,

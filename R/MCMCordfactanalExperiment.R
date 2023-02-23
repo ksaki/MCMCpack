@@ -146,8 +146,8 @@
 #'    }
 #'
 "MCMCordfactanalExperiment" <-
-  function(x, treatment, cov_phi = NA, cov_tau = NA,
-           phi = NA, L = NA,
+  function(x, treatment, 
+           phi = NA, 
            factors, lambda.constraints=list(),
            data=parent.frame(), burnin = 1000, mcmc = 20000,
            thin=1, tune=NA, verbose = 0, seed = NA,
@@ -396,15 +396,10 @@
                     Xrow = as.integer(nrow(X)),
                     Xcol = as.integer(ncol(X)),
                     treatment = as.integer(treatment),
-                    cov_phi = as.double(cov_phi),
-                    cov_phicol = as.integer(ncol(cov_phi)),
-                    cov_tau = as.double(cov_tau),
-                    cov_taucol = as.integer(ncol(cov_tau)),
                     #tau = as.double(tau),
                     #taucol = as.integer(ncol(tau)),
                     phi = as.double(phi),
                     phicol = as.integer(ncol(phi)),
-                    L = as.integer(L),
                     burnin = as.integer(burnin),
                     mcmc = as.integer(mcmc),
                     thin = as.integer(thin),
